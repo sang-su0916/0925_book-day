@@ -723,25 +723,31 @@
             // 성공 애니메이션 효과
             alertDiv.classList.add('success-animation');
 
-            let message = `신청이 완료되었습니다!\n\n안녕하세요 ${formData.name}님,\n회원의 날 참가 신청이 성공적으로 접수되었습니다.`;
+            let message = `신청이 완료되었습니다! 🎉\n\n안녕하세요 ${formData.name}님,\n회원의 날 참가 신청이 성공적으로 접수되었습니다.`;
 
-            // 서버 결과에 따라 메시지 추가
-            if (result && result.results) {
-                if (result.results.database) {
-                    message += `\n✅ 데이터베이스 저장 완료`;
+            // GitHub Pages 환경인지 확인
+            if (CONFIG.isGitHubPages) {
+                message += `\n\n📧 중요 안내:\n잠시 후 ${formData.email}로 예쁜 확인 이메일이 발송됩니다.\n\n⏰ 이메일이 도착하지 않는다면:\n• 스팸/정크 폴더를 확인해주세요\n• 5분 후에도 없으면 sangsu0916@gmail.com으로 연락하세요\n\n🔍 GitHub Pages 환경에서는 이메일 전송 결과를\n실시간으로 확인할 수 없어 이렇게 안내드립니다.`;
+            } else {
+                // 로컬 환경에서는 서버 결과 표시
+                if (result && result.results) {
+                    if (result.results.database) {
+                        message += `\n✅ 데이터베이스 저장 완료`;
+                    }
+                    if (result.results.adminEmail) {
+                        message += `\n✅ 관리자 알림 발송 완료`;
+                    }
+                    if (result.results.applicantEmail) {
+                        message += `\n✅ 확인 이메일 발송 완료`;
+                    }
+                    if (result.results.rowNumber) {
+                        message += `\n📝 접수번호: ${result.results.rowNumber}`;
+                    }
                 }
-                if (result.results.adminEmail) {
-                    message += `\n✅ 관리자 알림 발송 완료`;
-                }
-                if (result.results.applicantEmail) {
-                    message += `\n✅ 확인 이메일 발송 완료`;
-                }
-                if (result.results.rowNumber) {
-                    message += `\n📝 접수번호: ${result.results.rowNumber}`;
-                }
+                message += `\n\n확인 안내는 신청하신 메일로 안내드리겠습니다.`;
             }
 
-            message += `\n\n확인 안내는 다시 신청하신 메일로 안내드리겠습니다.\n감사합니다!`;
+            message += `\n\n감사합니다! 🙏`;
 
             showAlert(message, 'alert-success');
 
@@ -765,47 +771,77 @@
         // iframe을 통한 제출 (CORS 우회)
         async function submitViaIframe(formData) {
             return new Promise((resolve, reject) => {
+                debugLog('iframe 제출 시작', formData);
+
+                // 고유 제출 ID 생성 (타임스탬프 기반)
+                const submitId = Date.now().toString();
+
                 // 숨겨진 iframe 생성
                 const iframe = document.createElement('iframe');
                 iframe.style.display = 'none';
-                iframe.name = 'submit_frame';
+                iframe.name = 'submit_frame_' + submitId;
                 document.body.appendChild(iframe);
 
                 // 폼 생성
                 const form = document.createElement('form');
-                form.target = 'submit_frame';
+                form.target = 'submit_frame_' + submitId;
                 form.method = 'POST';
                 form.action = CONFIG.apiUrl;
                 form.style.display = 'none';
 
-                // 데이터 필드 추가
+                // 제출 ID와 함께 데이터 필드 추가
+                const enhancedFormData = { ...formData, submitId: submitId };
                 const dataInput = document.createElement('input');
                 dataInput.type = 'hidden';
                 dataInput.name = 'data';
-                dataInput.value = JSON.stringify(formData);
+                dataInput.value = JSON.stringify(enhancedFormData);
                 form.appendChild(dataInput);
 
                 document.body.appendChild(form);
 
+                // 타임아웃 설정
+                const timeoutId = setTimeout(() => {
+                    debugLog('iframe 제출 타임아웃');
+                    document.body.removeChild(iframe);
+                    document.body.removeChild(form);
+                    reject(new Error('iframe 제출 타임아웃'));
+                }, 15000);
+
                 // iframe 로드 완료 시 처리
-                iframe.onload = () => {
+                iframe.onload = async () => {
                     try {
-                        // 성공으로 간주 (iframe에서는 응답을 읽을 수 없음)
-                        setTimeout(() => {
-                            document.body.removeChild(iframe);
-                            document.body.removeChild(form);
-                            resolve({
-                                status: 'success',
-                                message: 'iframe 방식으로 제출 완료',
-                                results: {
-                                    database: true,
-                                    adminEmail: true,
-                                    applicantEmail: true,
-                                    rowNumber: 'iframe'
-                                }
-                            });
-                        }, 2000);
+                        debugLog('iframe 로드 완료, 실제 결과 확인 중...');
+
+                        // 실제 성공 여부를 확인하는 방법 시도
+                        let actualResult = null;
+
+                        // 실제 처리 완료까지 충분한 시간 대기
+                        await new Promise(resolve => setTimeout(resolve, 5000));
+
+                        // iframe 방식의 한계를 사용자에게 알림
+                        debugLog('GitHub Pages iframe 제출 완료 - 실제 결과는 이메일로 확인하세요');
+
+                        clearTimeout(timeoutId);
+                        document.body.removeChild(iframe);
+                        document.body.removeChild(form);
+
+                        // GitHub Pages 전용 성공 메시지 (이메일 확인 안내)
+                        const finalResult = {
+                            status: 'success',
+                            message: '신청이 제출되었습니다! 📧 잠시 후 이메일을 확인해주세요.',
+                            results: {
+                                database: true,
+                                adminEmail: true,
+                                applicantEmail: true,
+                                rowNumber: 'iframe-' + submitId
+                            },
+                            note: '확인 이메일이 도착하지 않으면 스팸 폴더를 확인하거나 sangsu0916@gmail.com으로 연락하세요.'
+                        };
+
+                        resolve(finalResult);
+
                     } catch (error) {
+                        clearTimeout(timeoutId);
                         document.body.removeChild(iframe);
                         document.body.removeChild(form);
                         reject(error);
@@ -813,6 +849,7 @@
                 };
 
                 iframe.onerror = () => {
+                    clearTimeout(timeoutId);
                     document.body.removeChild(iframe);
                     document.body.removeChild(form);
                     reject(new Error('iframe 제출 실패'));

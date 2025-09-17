@@ -101,10 +101,21 @@ function doPost(e) {
     // 3. 신청자 확인 이메일 발송
     let applicantEmailResult = false;
     try {
+      console.log('신청자 확인 이메일 발송 함수 호출 중...', { email: data.email, name: data.name });
       applicantEmailResult = sendApplicantConfirmationEmail(data, timestamp);
       console.log('신청자 이메일 결과:', applicantEmailResult);
+
+      if (!applicantEmailResult) {
+        console.error('신청자 이메일 함수가 false 반환 - 내부 오류 발생');
+      } else {
+        console.log('✅ 신청자 확인 이메일 발송 완료');
+      }
     } catch (emailError) {
-      console.error('신청자 이메일 실패:', emailError);
+      console.error('신청자 이메일 외부 catch 실패:', {
+        error: emailError.toString(),
+        stack: emailError.stack,
+        data: data
+      });
     }
 
     // 최종 응답
@@ -250,9 +261,15 @@ https://docs.google.com/spreadsheets/d/${CONFIG.spreadsheetId}
 // 신청자 확인 이메일 (예쁜 HTML 형식)
 function sendApplicantConfirmationEmail(data, timestamp) {
   try {
-    console.log('신청자 확인 이메일 발송 시작...');
+    console.log('신청자 확인 이메일 발송 시작...', { email: data.email, name: data.name });
+
+    // 데이터 유효성 검사
+    if (!data.email || !data.name) {
+      throw new Error('필수 데이터 누락: email=' + data.email + ', name=' + data.name);
+    }
 
     const subject = `✅ 접수 완료 - 회원의 날 신청이 접수되었습니다 (${data.name}님)`;
+    console.log('이메일 제목:', subject);
 
     const htmlBody = `<!DOCTYPE html>
 <html lang="ko">
@@ -691,17 +708,35 @@ function sendApplicantConfirmationEmail(data, timestamp) {
 </html>`;
 
     // 신청자에게 예쁜 HTML 이메일 발송
+    console.log('HTML 이메일 발송 준비 중...', { to: data.email, subjectLength: subject.length, htmlBodyLength: htmlBody.length });
+
     MailApp.sendEmail({
       to: data.email,
       subject: subject,
       htmlBody: htmlBody
     });
 
-    console.log(`✅ 신청자 확인 이메일 발송: ${data.email}`);
+    console.log(`✅ 신청자 확인 이메일 발송 성공: ${data.email}`);
     return true;
 
   } catch (error) {
-    console.error('❌ 신청자 이메일 발송 실패:', error);
+    console.error('❌ 신청자 이메일 발송 실패:', {
+      error: error.toString(),
+      stack: error.stack,
+      email: data.email,
+      name: data.name,
+      timestamp: timestamp
+    });
+
+    // 오류 세부 정보 로깅
+    if (error.toString().includes('quota')) {
+      console.error('Gmail 할당량 초과 오류 - 하루 100개 이메일 제한');
+    } else if (error.toString().includes('permission')) {
+      console.error('Gmail 권한 오류 - 스크립트 권한 확인 필요');
+    } else if (error.toString().includes('invalid')) {
+      console.error('잘못된 이메일 주소:', data.email);
+    }
+
     return false;
   }
 }
