@@ -1,0 +1,44 @@
+# macOS
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+
+# Claude Code
+.claude/settings.local.json
+.claude/cache/
+
+# Backup folders
+backup*/
+backup_*/
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# Node modules (if any)
+node_modules/
+
+# Environment files
+.env
+.env.local
+
+# Private/sensitive files
+*_private.*
+*_secret.*
+
+# Test files
+test_*.js
+TEST_*.js
+*_테스트.*
+
+# Old/deprecated files
+OLD_*
+DEPRECATED_*
+삭제_*
+정리_*

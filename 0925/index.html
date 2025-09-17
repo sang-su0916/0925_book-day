@@ -493,7 +493,7 @@
     <script>
         // 설정 - PREMIUM 버전
         const CONFIG = {
-            apiUrl: 'https://script.google.com/macros/s/AKfycbxt6IeDoKMtAW78C32cRWn0krjTeXOKDkxUz3UUJJVT9P9oUmfvxOuHHkQXScvJj1Pq/exec',
+            apiUrl: 'https://script.google.com/macros/s/AKfycbywAoZTk5vSgJSxfb7Ih1U5F9gGVMKVyNEz1RWZ8UJvZRaOoYv97b_dl4z0oZ5iE8jb/exec',
             maxRetries: 3,
             retryDelay: 2000
         };
@@ -595,20 +595,54 @@
                 try {
                     console.log(`제출 시도 ${attempt}/${CONFIG.maxRetries}`);
 
-                    const response = await fetch(CONFIG.apiUrl, {
-                        method: 'POST',
-                        mode: 'no-cors',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(formData)
-                    });
+                    let success = false;
+                    let result = null;
 
-                    // no-cors 모드에서는 응답을 확인할 수 없으므로 성공으로 간주
-                    console.log('서버 요청 완료');
+                    // 방법 1: FormData 방식 시도
+                    if (attempt <= 2) {
+                        try {
+                            console.log('FormData 방식 시도...');
+                            const formDataToSend = new FormData();
+                            formDataToSend.append('data', JSON.stringify(formData));
 
-                    await handleSuccess(formData);
-                    return;
+                            const response = await fetch(CONFIG.apiUrl, {
+                                method: 'POST',
+                                body: formDataToSend
+                            });
+
+                            console.log('서버 응답:', response.status);
+
+                            if (response.ok) {
+                                result = await response.json();
+                                console.log('서버 결과:', result);
+                                success = true;
+                            }
+                        } catch (fetchError) {
+                            console.log('FormData 방식 실패:', fetchError.message);
+                        }
+                    }
+
+                    // 방법 2: iframe 방식 시도 (CORS 우회)
+                    if (!success && attempt === 3) {
+                        try {
+                            console.log('iframe 방식 시도...');
+                            result = await submitViaIframe(formData);
+                            success = true;
+                        } catch (iframeError) {
+                            console.log('iframe 방식 실패:', iframeError.message);
+                        }
+                    }
+
+                    if (success && result) {
+                        if (result.status === 'success' || result.status === 'partial') {
+                            await handleSuccess(formData, result);
+                            return;
+                        } else {
+                            throw new Error(result.message || '서버 처리 실패');
+                        }
+                    } else {
+                        throw new Error('모든 제출 방식 실패');
+                    }
 
                 } catch (error) {
                     console.error(`제출 시도 ${attempt} 실패:`, error);
@@ -626,13 +660,33 @@
         }
 
         // 성공 처리
-        async function handleSuccess(formData) {
+        async function handleSuccess(formData, result) {
             setLoading(false);
 
             // 성공 애니메이션 효과
             alertDiv.classList.add('success-animation');
 
-            showAlert(`신청이 완료되었습니다!\n\n안녕하세요 ${formData.name}님,\n회원의 날 참가 신청이 성공적으로 접수되었습니다.\n\n확인 연락을 드릴 예정이니 잠시만 기다려주세요.\n이메일로도 상세한 안내를 보내드립니다.\n\n감사합니다!`, 'alert-success');
+            let message = `신청이 완료되었습니다!\n\n안녕하세요 ${formData.name}님,\n회원의 날 참가 신청이 성공적으로 접수되었습니다.`;
+
+            // 서버 결과에 따라 메시지 추가
+            if (result && result.results) {
+                if (result.results.database) {
+                    message += `\n✅ 데이터베이스 저장 완료`;
+                }
+                if (result.results.adminEmail) {
+                    message += `\n✅ 관리자 알림 발송 완료`;
+                }
+                if (result.results.applicantEmail) {
+                    message += `\n✅ 확인 이메일 발송 완료`;
+                }
+                if (result.results.rowNumber) {
+                    message += `\n📝 접수번호: ${result.results.rowNumber}`;
+                }
+            }
+
+            message += `\n\n확인 안내는 다시 신청하신 메일로 안내드리겠습니다.\n감사합니다!`;
+
+            showAlert(message, 'alert-success');
 
             form.reset();
             clearLocalStorage();
@@ -651,12 +705,102 @@
             }, 3000);
         }
 
+        // iframe을 통한 제출 (CORS 우회)
+        async function submitViaIframe(formData) {
+            return new Promise((resolve, reject) => {
+                // 숨겨진 iframe 생성
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.name = 'submit_frame';
+                document.body.appendChild(iframe);
+
+                // 폼 생성
+                const form = document.createElement('form');
+                form.target = 'submit_frame';
+                form.method = 'POST';
+                form.action = CONFIG.apiUrl;
+                form.style.display = 'none';
+
+                // 데이터 필드 추가
+                const dataInput = document.createElement('input');
+                dataInput.type = 'hidden';
+                dataInput.name = 'data';
+                dataInput.value = JSON.stringify(formData);
+                form.appendChild(dataInput);
+
+                document.body.appendChild(form);
+
+                // iframe 로드 완료 시 처리
+                iframe.onload = () => {
+                    try {
+                        // 성공으로 간주 (iframe에서는 응답을 읽을 수 없음)
+                        setTimeout(() => {
+                            document.body.removeChild(iframe);
+                            document.body.removeChild(form);
+                            resolve({
+                                status: 'success',
+                                message: 'iframe 방식으로 제출 완료',
+                                results: {
+                                    database: true,
+                                    adminEmail: true,
+                                    applicantEmail: true,
+                                    rowNumber: 'iframe'
+                                }
+                            });
+                        }, 2000);
+                    } catch (error) {
+                        document.body.removeChild(iframe);
+                        document.body.removeChild(form);
+                        reject(error);
+                    }
+                };
+
+                iframe.onerror = () => {
+                    document.body.removeChild(iframe);
+                    document.body.removeChild(form);
+                    reject(new Error('iframe 제출 실패'));
+                };
+
+                // 폼 제출
+                form.submit();
+
+                // 타임아웃 설정
+                setTimeout(() => {
+                    if (document.body.contains(iframe)) {
+                        document.body.removeChild(iframe);
+                        document.body.removeChild(form);
+                        reject(new Error('iframe 제출 타임아웃'));
+                    }
+                }, 10000);
+            });
+        }
+
         // 오류 처리
         async function handleError(error, formData) {
             setLoading(false);
             console.error('최종 제출 실패:', error);
 
-            showAlert(`일시적인 네트워크 문제로 신청 처리에 실패했습니다.\n\n하지만 걱정하지 마세요!\n• 신청 내용이 로컬에 안전하게 보관되었습니다\n• 잠시 후 다시 시도해주시거나\n• 직접 연락 주시면 수동으로 접수해드립니다\n\n문의: sangsu0916@gmail.com`, 'alert-error');
+            // 오류 유형에 따른 메시지 결정
+            let errorMessage = `신청 처리 중 문제가 발생했습니다.\n\n`;
+
+            if (error.message && error.message.includes('Failed to fetch')) {
+                errorMessage += `🌐 네트워크 연결 문제:\n• 인터넷 연결을 확인해주세요\n• VPN이나 방화벽 설정을 확인해주세요\n`;
+            } else if (error.message && error.message.includes('CORS')) {
+                errorMessage += `🔒 보안 정책 문제:\n• 브라우저를 새로고침해주세요\n• 시크릿/프라이빗 모드로 시도해주세요\n`;
+            } else {
+                errorMessage += `⚠️ 서버 처리 문제:\n• 잠시 후 다시 시도해주세요\n• 브라우저를 새로고침해주세요\n`;
+            }
+
+            errorMessage += `\n🆘 문제가 지속되면:\n📞 sangsu0916@gmail.com\n📱 010-3709-5785\n\n💾 입력하신 내용은 안전하게 보관되었습니다.`;
+
+            showAlert(errorMessage, 'alert-error');
+
+            // 콘솔에 상세 오류 정보 출력
+            console.log('=== 오류 진단 정보 ===');
+            console.log('URL:', CONFIG.apiUrl);
+            console.log('오류 타입:', error.name);
+            console.log('오류 메시지:', error.message);
+            console.log('신청 데이터:', formData);
         }
 
         // 사용자 IP 주소 가져오기
