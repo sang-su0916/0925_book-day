@@ -470,6 +470,11 @@
             <div class="text-3xl font-black gradient-text mb-4">에이큐브</div>
             <p class="font-medium">AI 시대를 선도하는 혁신적인 경영자문 기업연구소</p>
             <p>Copyright © 2025 - All rights reserved</p>
+            <!-- 숨겨진 디버그 활성화 버튼 -->
+            <div id="debugToggle" style="margin-top: 20px; opacity: 0.3; cursor: pointer; font-size: 12px;"
+                 onclick="toggleDebugMode()">
+                🔧 DEBUG
+            </div>
         </aside>
         <nav>
             <div class="grid grid-flow-col gap-4">
@@ -491,12 +496,49 @@
 
     <!-- JavaScript -->
     <script>
-        // 설정 - PREMIUM 버전
+        // 설정 - GitHub Pages 최적화 버전
         const CONFIG = {
             apiUrl: 'https://script.google.com/macros/s/AKfycbywAoZTk5vSgJSxfb7Ih1U5F9gGVMKVyNEz1RWZ8UJvZRaOoYv97b_dl4z0oZ5iE8jb/exec',
-            maxRetries: 3,
-            retryDelay: 2000
+            maxRetries: 4,
+            retryDelay: 2000,
+            isGitHubPages: location.hostname.includes('github.io'),
+            isLocal: location.protocol === 'file:',
+            enableDebug: true
         };
+
+        // 디버깅 함수
+        function debugLog(message, data = null) {
+            if (CONFIG.enableDebug) {
+                console.log(`[DEBUG ${new Date().toLocaleTimeString()}] ${message}`, data || '');
+
+                // GitHub Pages에서는 화면에도 표시
+                if (CONFIG.isGitHubPages && window.DEBUG_MODE) {
+                    const debugDiv = document.getElementById('debugInfo') || (() => {
+                        const div = document.createElement('div');
+                        div.id = 'debugInfo';
+                        div.style.cssText = 'position:fixed;top:10px;right:10px;background:rgba(0,0,0,0.8);color:white;padding:10px;border-radius:5px;max-width:300px;font-size:12px;z-index:9999;max-height:200px;overflow-y:auto;';
+                        document.body.appendChild(div);
+                        return div;
+                    })();
+                    debugDiv.innerHTML += `<div>${new Date().toLocaleTimeString()}: ${message}</div>`;
+                }
+            }
+        }
+
+        // 환경 감지 및 설정 조정
+        if (CONFIG.isGitHubPages) {
+            debugLog('GitHub Pages 환경 감지됨, 설정 최적화 중...');
+            CONFIG.maxRetries = 5; // GitHub Pages에서는 더 많은 재시도
+            CONFIG.retryDelay = 3000; // 더 긴 대기 시간
+        }
+
+        debugLog('환경 정보', {
+            hostname: location.hostname,
+            protocol: location.protocol,
+            isGitHubPages: CONFIG.isGitHubPages,
+            isLocal: CONFIG.isLocal,
+            userAgent: navigator.userAgent.substring(0, 50)
+        });
 
         // DOM 요소
         const form = document.getElementById('applicationForm');
@@ -579,7 +621,7 @@
                 userAgent: navigator.userAgent
             };
 
-            console.log('제출 데이터:', formData);
+            debugLog('제출 데이터 준비', formData);
 
             // UI 상태 변경
             setLoading(true);
@@ -590,46 +632,61 @@
 
             let lastError = null;
 
+            // GitHub Pages 환경에서는 더 공격적인 방법 시도
+            if (CONFIG.isGitHubPages) {
+                debugLog('GitHub Pages 환경: iframe 방식 우선 시도');
+                try {
+                    const iframeResult = await submitViaIframe(formData);
+                    await handleSuccess(formData, iframeResult);
+                    return;
+                } catch (iframeError) {
+                    debugLog('iframe 방식 실패, fetch 방식 시도', iframeError.message);
+                }
+            }
+
             // 재시도 로직
             for (let attempt = 1; attempt <= CONFIG.maxRetries; attempt++) {
                 try {
-                    console.log(`제출 시도 ${attempt}/${CONFIG.maxRetries}`);
+                    debugLog(`제출 시도 ${attempt}/${CONFIG.maxRetries}`);
 
                     let success = false;
                     let result = null;
 
-                    // 방법 1: FormData 방식 시도
-                    if (attempt <= 2) {
+                    // 방법 1: FormData 방식 시도 (개선된 헤더)
+                    if (attempt <= 3) {
                         try {
-                            console.log('FormData 방식 시도...');
+                            debugLog('FormData 방식 시도...');
                             const formDataToSend = new FormData();
                             formDataToSend.append('data', JSON.stringify(formData));
 
                             const response = await fetch(CONFIG.apiUrl, {
                                 method: 'POST',
-                                body: formDataToSend
+                                body: formDataToSend,
+                                mode: 'cors',
+                                credentials: 'omit',
+                                referrerPolicy: 'no-referrer'
                             });
 
-                            console.log('서버 응답:', response.status);
+                            debugLog(`서버 응답: ${response.status}`);
 
                             if (response.ok) {
                                 result = await response.json();
-                                console.log('서버 결과:', result);
+                                debugLog('서버 결과', result);
                                 success = true;
                             }
                         } catch (fetchError) {
-                            console.log('FormData 방식 실패:', fetchError.message);
+                            debugLog('FormData 방식 실패', fetchError.message);
                         }
                     }
 
                     // 방법 2: iframe 방식 시도 (CORS 우회)
-                    if (!success && attempt === 3) {
+                    if (!success && attempt >= 3) {
                         try {
-                            console.log('iframe 방식 시도...');
+                            debugLog('iframe 방식 시도...');
                             result = await submitViaIframe(formData);
                             success = true;
                         } catch (iframeError) {
-                            console.log('iframe 방식 실패:', iframeError.message);
+                            debugLog('iframe 방식 실패', iframeError.message);
                         }
                     }
 
@@ -645,11 +702,11 @@
                     }
 
                 } catch (error) {
-                    console.error(`제출 시도 ${attempt} 실패:`, error);
+                    debugLog(`제출 시도 ${attempt} 실패`, error.message);
                     lastError = error;
 
                     if (attempt < CONFIG.maxRetries) {
-                        console.log(`${CONFIG.retryDelay}ms 후 재시도...`);
+                        debugLog(`${CONFIG.retryDelay}ms 후 재시도...`);
                         await new Promise(resolve => setTimeout(resolve, CONFIG.retryDelay));
                     }
                 }
@@ -935,7 +992,38 @@
             }
         });
 
-        console.log('에이큐브 회원의 날 신청 시스템 로드 완료 - PREMIUM DaisyUI 버전');
+        // 디버그 모드 토글 함수
+        function toggleDebugMode() {
+            window.DEBUG_MODE = !window.DEBUG_MODE;
+            const toggle = document.getElementById('debugToggle');
+
+            if (window.DEBUG_MODE) {
+                toggle.style.opacity = '1';
+                toggle.style.color = '#00ff00';
+                toggle.textContent = '🔧 DEBUG ON';
+                debugLog('디버그 모드 활성화됨');
+
+                // 환경 정보 다시 출력
+                debugLog('현재 환경 정보', {
+                    hostname: location.hostname,
+                    protocol: location.protocol,
+                    isGitHubPages: CONFIG.isGitHubPages,
+                    isLocal: CONFIG.isLocal
+                });
+            } else {
+                toggle.style.opacity = '0.3';
+                toggle.style.color = 'white';
+                toggle.textContent = '🔧 DEBUG';
+
+                // 디버그 창 제거
+                const debugDiv = document.getElementById('debugInfo');
+                if (debugDiv) {
+                    debugDiv.remove();
+                }
+            }
+        }
+
+        debugLog('에이큐브 회원의 날 신청 시스템 로드 완료 - GitHub Pages 최적화 버전');
     </script>
 </body>
 </html>
