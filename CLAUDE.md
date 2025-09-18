@@ -6,13 +6,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 회원의 날 신청 시스템 - Google Forms alternative with Google Apps Script backend and premium HTML frontend for event registration.
 
-**Current Status**: System partially working - database saves are failing, email differentiation not working properly.
+**Current Status**: ✅ **FIXED** - New clean Google Apps Script deployed with proper email functions. Ready for testing!
 
 ## Architecture
 
 ### Backend (Google Apps Script)
-- **Main File**: `UPDATED_Google_Apps_Script.js` (473 lines)
-- **Web App URL**: `https://script.google.com/macros/s/AKfycbw9OMk2tflSw9-NJzBu3EYJSbsZub_11YipMLdRUvIsy5WxxZpnQFTbRNJraM9IH7PY/exec`
+- **Main File**: `NEW_Google_Apps_Script_완전깔끔버전.js` (197 lines)
+- **Web App URL**: `https://script.google.com/macros/s/AKfycbz38lXwTLqnJyeJnsFKwSgIm5ekQR6ZR785E5zE1NH9G7iZNe2CHo0jmJZKAliZEqf7/exec`
+- **Project ID**: `1aAmMLMzKGJY6TPTez6Qj83kcNIRpqT9pZf17shyPbp0`
 - **Spreadsheet ID**: `1hFAXknx86eciOWfav1tIo3H-EBLXm8EjMg0BkHLRZaY`
 - **Sheet Name**: `회원의날_신청자`
 - **Admin Email**: `sangsu0916@gmail.com`

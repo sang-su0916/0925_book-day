@@ -101,7 +101,23 @@ function doPost(e) {
     // 3. 신청자 확인 이메일 발송
     let applicantEmailResult = false;
     try {
-      console.log('신청자 확인 이메일 발송 함수 호출 중...', { email: data.email, name: data.name });
+      console.log('신청자 확인 이메일 발송 함수 호출 중...');
+      console.log('전달받은 data 객체:', JSON.stringify(data, null, 2));
+
+      // 데이터 유효성 검사 강화
+      if (!data) {
+        throw new Error('data 객체가 null 또는 undefined입니다');
+      }
+
+      if (!data.email) {
+        throw new Error('이메일 주소가 없습니다. data.email = ' + data.email);
+      }
+
+      if (!data.name) {
+        throw new Error('이름이 없습니다. data.name = ' + data.name);
+      }
+
+      console.log('데이터 유효성 검사 통과:', { email: data.email, name: data.name });
       applicantEmailResult = sendApplicantConfirmationEmail(data, timestamp);
       console.log('신청자 이메일 결과:', applicantEmailResult);
 
